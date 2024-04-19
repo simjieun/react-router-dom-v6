@@ -1,0 +1,101 @@
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { createBrowserRouter, redirect, RouterProvider } from 'react-router-dom';
+import Layout from './routes/Layout.tsx';
+// import Home, { loader as homeLoader } from "./routes/Home.tsx";
+import TeamLayout from './routes/TeamLayout.tsx';
+import Team from './routes/Team.tsx';
+import TeamError from './routes/TeamError.tsx';
+
+let teams = [
+    { id: '1', name: 'Team 1' },
+    { id: '2', name: 'Team 2' },
+    { id: '3', name: 'Team 3' },
+];
+
+async function teamLoader() {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    return {
+        teams,
+    };
+}
+
+async function teamDetailLoader({ params }) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const team = teams.find((team) => team.id === params.id);
+    return {
+        team,
+    };
+}
+
+const teamsAction = async ({ request, params }) => {
+    switch (request.method) {
+        case 'POST':
+            const team = {
+                id: `${teams.length + 1}`,
+                name: `Team ${teams.length + 1}`,
+            };
+            teams.push(team);
+            return team;
+        case 'DELETE':
+            const formData = await request.formData();
+            const id = formData.get('id');
+            teams = teams.filter((team) => team.id !== id);
+
+            return redirect('/teams');
+        default:
+            throw new Response('', { status: 405 });
+    }
+};
+
+const router = createBrowserRouter([
+    {
+        path: '/',
+        element: <Layout />,
+        errorElement: <>Layout Error</>,
+        children: [
+            {
+                index: true,
+                loader: async ({ request, params }) => {
+                    const { default: loader } = await import('./loaders/homeLoader');
+                    return loader({ request, params });
+                },
+                lazy: () => import('./routes/Home'),
+                // lazy: async () => {
+                //     const {loader, default:Component} = await import("./routes/Home");
+                //     return {
+                //         loader,
+                //         element:<Component />,
+                //     }
+                // }
+            },
+            { path: 'about', lazy: () => import('./routes/About') },
+            {
+                path: 'teams',
+                element: <TeamLayout />,
+                errorElement: <>Team Layout Error</>,
+                loader: teamLoader,
+                action: teamsAction,
+                children: [
+                    { index: true, element: <>Team Index</> },
+                    {
+                        path: ':id',
+                        element: <Team />,
+                        errorElement: <TeamError />,
+                        loader: teamDetailLoader,
+                        // action: teamsAction
+                    },
+                ],
+            },
+            { path: '*', element: <>Not Found</> },
+        ],
+    },
+]);
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+        <RouterProvider router={router} />
+    </React.StrictMode>,
+);
